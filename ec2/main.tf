@@ -71,6 +71,7 @@ resource "aws_instance" "example" {
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.example.id]
+  iam_instance_profile = aws_iam_instance_profile.ec2_for_ssm.name
 
   user_data = <<EOF
     #! /bin/bash
@@ -79,4 +80,38 @@ resource "aws_instance" "example" {
   EOF
 
   tags = { Name = "tf01-instance" }
+}
+
+// IAMロール
+
+module "ec2_for_ssm_role" {
+  source = "./modules/iam_role"
+  name = "ec2-for-ssm"
+  identifier = "ec2.amazonaws.com"
+  policy = data.aws_iam_policy_document.ec2_for_ssm.json
+}
+
+data "aws_iam_policy_document" "ec2_for_ssm" {
+  source_json = data.aws_iam_policy.ec2_for_ssm.policy
+
+  statement {
+    effect = "Allow"
+    resources = ["*"]
+
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath",
+      "kms:Decrypt",
+    ]
+  }
+}
+
+data "aws_iam_policy" "ec2_for_ssm" {
+  arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_for_ssm" {
+  name = "ec2-for-ssm"
+  role = module.ec2_for_ssm_role.iam_role_name
 }
